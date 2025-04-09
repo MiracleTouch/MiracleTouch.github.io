@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>奇畿科技滑鼠畫線測試程式</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #background {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 794px;
+            height: 190px;
+            background-image: url('https://www.miracletouch.com.tw/www/upload/file/250407155815725bb.jpg');
+            background-size: cover;
+            opacity: 0.3;
+            z-index: -1;
+        }
+
+        #grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: 20px 20px;
+            background-image: linear-gradient(to right, rgba(128, 128, 128, 0.5) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(128, 128, 128, 0.5) 1px, transparent 1px);
+            z-index: -1;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        #stats {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1;
+            pointer-events: none; /* 防止记录栏位影响鼠标事件 */
+        }
+    </style>
+</head>
+
+<body>
+    <div id="background"></div>
+    <div id="grid"></div>
+    <canvas id="canvas"></canvas>
+    <div id="stats">
+        <p>左鍵次數: <span id="left-click-count">0</span></p>
+        <p>中鍵次數: <span id="middle-click-count">0</span></p>
+        <p>右鍵次數: <span id="right-click-count">0</span></p>
+        <p>滾輪上滾: <span id="scroll-up-count">0</span></p>
+        <p>滾輪下滾: <span id="scroll-down-count">0</span></p>
+        <p>回報率: <span id="report-rate">0</span> Hz</p>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const leftClickCount = document.getElementById('left-click-count');
+        const rightClickCount = document.getElementById('right-click-count');
+        const middleClickCount = document.getElementById('middle-click-count');
+        const scrollUpCount = document.getElementById('scroll-up-count');
+        const scrollDownCount = document.getElementById('scroll-down-count');
+        const reportRateDisplay = document.getElementById('report-rate');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let clickCounts = {
+            left: 0,
+            right: 0,
+            middle: 0
+        };
+        let scrollCounts = {
+            up: 0,
+            down: 0
+        };
+        let moveCount = 0;
+        let lastTime = performance.now();
+        let isLeftDown = false;
+        let isRightDown = false;
+        let throttleTimer = null;
+        const throttleInterval = 10; // 节流间隔，单位：毫秒
+
+        const colors = {
+            left: 'red',
+            right: 'blue',
+            middle: 'green'
+        };
+
+        function startDrawing(e) {
+            // 阻止右键默认的上下文菜单行为
+            if (e.button === 2) {
+                e.preventDefault();
+            }
+            if (e.button === 0) {
+                isLeftDown = true;
+            } else if (e.button === 2) {
+                isRightDown = true;
+            }
+            if (isLeftDown && isRightDown) {
+                clearCanvasAndData();
+                return;
+            }
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+            switch (e.button) {
+                case 0:
+                    clickCounts.left++;
+                    leftClickCount.textContent = clickCounts.left;
+                    ctx.strokeStyle = colors.left;
+                    break;
+                case 1:
+                    clickCounts.middle++;
+                    middleClickCount.textContent = clickCounts.middle;
+                    ctx.strokeStyle = colors.middle;
+                    break;
+                case 2:
+                    clickCounts.right++;
+                    rightClickCount.textContent = clickCounts.right;
+                    ctx.strokeStyle = colors.right;
+                    break;
+            }
+        }
+
+        function throttledDraw(e) {
+            if (!throttleTimer) {
+                draw(e);
+                throttleTimer = setTimeout(() => {
+                    throttleTimer = null;
+                }, throttleInterval);
+            }
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+            moveCount++;
+        }
+
+        function stopDrawing(e) {
+            if (e.button === 0) {
+                isLeftDown = false;
+            } else if (e.button === 2) {
+                isRightDown = false;
+            }
+            isDrawing = false;
+        }
+
+        function handleScroll(e) {
+            if (e.deltaY < 0) {
+                scrollCounts.up++;
+                scrollUpCount.textContent = scrollCounts.up;
+            } else {
+                scrollCounts.down++;
+                scrollDownCount.textContent = scrollCounts.down;
+            }
+        }
+
+        function clearCanvasAndData() {
+            // 清除画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // 重置点击计数
+            clickCounts = {
+                left: 0,
+                right: 0,
+                middle: 0
+            };
+            leftClickCount.textContent = 0;
+            rightClickCount.textContent = 0;
+            middleClickCount.textContent = 0;
+            // 重置滚轮计数
+            scrollCounts = {
+                up: 0,
+                down: 0
+            };
+            scrollUpCount.textContent = 0;
+            scrollDownCount.textContent = 0;
+            // 重置报告率
+            moveCount = 0;
+            lastTime = performance.now();
+            reportRateDisplay.textContent = 0;
+        }
+
+        function calculateReportRate() {
+            const now = performance.now();
+            const elapsed = now - lastTime;
+            if (elapsed >= 1000) {
+                const reportRate = moveCount;
+                reportRateDisplay.textContent = reportRate;
+                moveCount = 0;
+                lastTime = now;
+            }
+            requestAnimationFrame(calculateReportRate);
+        }
+
+        function updateCanvasSize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        function updateBackgroundAndGrid() {
+            const background = document.getElementById('background');
+            const grid = document.getElementById('grid');
+            background.style.width = 794 + 'px';
+            background.style.height = 190 + 'px';
+            grid.style.width = window.innerWidth + 'px';
+            grid.style.height = window.innerHeight + 'px';
+        }
+
+        document.addEventListener('fullscreenchange', function () {
+            updateCanvasSize();
+            updateBackgroundAndGrid();
+        });
+
+        window.addEventListener('resize', function () {
+            updateCanvasSize();
+            updateBackgroundAndGrid();
+        });
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', throttledDraw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        canvas.addEventListener('wheel', handleScroll);
+        // 为 canvas 添加阻止右键菜单的事件
+        canvas.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+        });
+        // 监听键盘事件
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'c' || e.key === 'C') {
+                clearCanvasAndData();
+            }
+        });
+
+        // 开始计算报告率
+        calculateReportRate();
+    </script>
+</body>
+
+</html>
+    
