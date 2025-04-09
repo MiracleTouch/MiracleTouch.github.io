@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多點觸控測試</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        button {
+            position: fixed;
+            top: 10px;
+            z-index: 1000;
+        }
+
+        #clearButton {
+            right: 100px;
+        }
+
+        #fullscreenButton {
+            right: 10px;
+        }
+
+        #fingerCount {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background-color: white;
+            padding: 5px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <button id="clearButton">Clear</button>
+    <button id="fullscreenButton">Full Screen</button>
+    <div id="fingerCount">手指數量: 0</div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const fullscreenButton = document.getElementById('fullscreenButton');
+        const clearButton = document.getElementById('clearButton');
+        const fingerCountElement = document.getElementById('fingerCount');
+
+        let isDrawing = {};
+        let lastX = {};
+        let lastY = {};
+        // 定义不同手指的颜色
+        const colors = ['#007BFF', '#FF4500', '#800080', '#00FF00', '#008000', '#FF007F', '#8B4513', '#0000CD', '#FFFF00', '#8B008B'];
+        // 设置线条粗度为 5
+        ctx.lineWidth = 15;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // 每次调整大小后重新绘制图片
+            drawBackgroundImage();
+        }
+
+        function startDrawing(e) {
+            e.preventDefault();
+            const touches = e.changedTouches;
+            for (let i = 0; i < touches.length; i++) {
+                const touch = touches[i];
+                const touchId = touch.identifier;
+                isDrawing[touchId] = true;
+                lastX[touchId] = touch.pageX - canvas.offsetLeft;
+                lastY[touchId] = touch.pageY - canvas.offsetTop;
+            }
+            updateFingerCount(e.touches.length);
+        }
+
+        function draw(e) {
+            e.preventDefault();
+            const touches = e.changedTouches;
+            for (let i = 0; i < touches.length; i++) {
+                const touch = touches[i];
+                const touchId = touch.identifier;
+                if (isDrawing[touchId]) {
+                    ctx.strokeStyle = colors[touchId % colors.length];
+                    ctx.beginPath();
+                    ctx.moveTo(lastX[touchId], lastY[touchId]);
+                    ctx.lineTo(touch.pageX - canvas.offsetLeft, touch.pageY - canvas.offsetTop);
+                    ctx.stroke();
+                    lastX[touchId] = touch.pageX - canvas.offsetLeft;
+                    lastY[touchId] = touch.pageY - canvas.offsetTop;
+                }
+            }
+            updateFingerCount(e.touches.length);
+        }
+
+        function stopDrawing(e) {
+            e.preventDefault();
+            const touches = e.changedTouches;
+            for (let i = 0; i < touches.length; i++) {
+                const touch = touches[i];
+                const touchId = touch.identifier;
+                isDrawing[touchId] = false;
+            }
+            updateFingerCount(e.touches.length);
+        }
+
+        function toggleFullscreen() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                canvas.requestFullscreen();
+            }
+        }
+
+        // 清除画布
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackgroundImage();
+        }
+
+        // 更新手指数量显示
+        function updateFingerCount(count) {
+            fingerCountElement.textContent = `当前触碰手指数量: ${count}`;
+        }
+
+        // 加载并绘制图案
+        const img = new Image();
+        img.src = 'https://dummyimage.com/794x190/000/fff';
+        function drawBackgroundImage() {
+            if (img.complete) {
+                ctx.save();
+                ctx.globalAlpha = 0.5; // 设置透明度为 50%
+                const x = (canvas.width - img.width) / 2;
+                const y = (canvas.height - img.height) / 2;
+                ctx.drawImage(img, x, y);
+                ctx.restore();
+            }
+        }
+        img.onload = function () {
+            resizeCanvas();
+        };
+
+        window.addEventListener('resize', resizeCanvas);
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchcancel', stopDrawing);
+        fullscreenButton.addEventListener('click', toggleFullscreen);
+        clearButton.addEventListener('click', clearCanvas);
+        window.addEventListener('keydown', function (e) {
+            if (e.key === 'c' || e.key === 'C') {
+                clearCanvas();
+            }
+        });
+    </script>
+</body>
+
+</html>    
