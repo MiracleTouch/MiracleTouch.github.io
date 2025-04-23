@@ -7,7 +7,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="https://www.miracletouch.com.tw/www/upload/file/25042312002843f5e.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>奇畿科技-多指觸控測試程式</title>
+    <title>MiracleTouch-Multi-Touch test program</title>
     <style>
         body {
             margin: 0;
@@ -70,8 +70,8 @@
 
 <body>
     <canvas id="canvas"></canvas>
-    <div id="fingerCount">觸碰數量: 0</div>
-    <button id="fullscreenButton">全螢幕</button>
+    <div id="fingerCount">Number of touches: 0</div>
+    <button id="fullscreenButton">Full screen</button>
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -148,7 +148,7 @@
                 } else if (document.msExitFullscreen) {
                     document.msExitFullscreen();
                 }
-                fullscreenButton.textContent = '全螢幕';
+                fullscreenButton.textContent = 'Full screen';
             } else {
                 if (canvas.requestFullscreen) {
                     canvas.requestFullscreen();
@@ -157,7 +157,7 @@
                 } else if (canvas.msRequestFullscreen) {
                     canvas.msRequestFullscreen();
                 }
-                fullscreenButton.textContent = '全螢幕';
+                fullscreenButton.textContent = 'Full screen';
             }
         }
 
@@ -168,7 +168,7 @@
         }
 
         function updateFingerCount(count) {
-            fingerCountElement.textContent = `觸碰數量: ${count}`;
+            fingerCountElement.textContent = `Number of touches: ${count}`;
         }
 
         const img = new Image();
