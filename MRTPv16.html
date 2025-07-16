@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>觸控格子網頁</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        neutral: '#F3F4F6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .grid-item {
+                @apply transition-all duration-150 bg-white/80 border border-gray-200/50;
+            }
+            .grid-item-active {
+                @apply bg-primary/90;
+            }
+            .control-button {
+                @apply fixed top-2 right-2 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg z-50 flex items-center justify-center w-10 h-10 transition-all duration-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/50;
+            }
+            .control-button.active {
+                @apply bg-primary text-white;
+            }
+            .settings-panel {
+                @apply fixed top-14 right-2 bg-white/95 backdrop-blur-md p-3 rounded-lg shadow-lg z-40 transform translate-x-full transition-transform duration-300 ease-in-out w-64;
+            }
+            .settings-panel.active {
+                @apply transform translate-x-0;
+            }
+            .active-count {
+                @apply fixed top-2 left-2 bg-secondary/90 text-white px-2 py-1 rounded-lg shadow-lg text-xs font-medium backdrop-blur-sm z-50;
+            }
+            .grid-container {
+                @apply relative flex-grow pt-2 pb-2 px-2 flex items-center justify-center;
+            }
+            .center-image {
+                @apply absolute inset-0 bg-center bg-no-repeat opacity-50 pointer-events-none bg-contain;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans overflow-hidden">
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- 變色格子數量顯示 (只保留數字) -->
+        <div id="active-count" class="active-count">
+            <span id="active-number">0</span>
+        </div>
+        
+        <!-- 設置按鈕 -->
+        <button id="settings-btn" class="control-button">
+            <i class="fa fa-cog"></i>
+        </button>
+        
+        <!-- 設置面板 -->
+        <div id="settings-panel" class="settings-panel">
+            <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <label for="rows" class="text-xs font-medium">縱向:</label>
+                    <input type="number" id="rows" min="1" max="16" value="3" class="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 text-xs">
+                </div>
+                <div class="flex items-center justify-between">
+                    <label for="cols" class="text-xs font-medium">橫向:</label>
+                    <input type="number" id="cols" min="1" max="22" value="3" class="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 text-xs">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button id="generate-grid" class="flex-1 btn btn-primary">
+                        <i class="fa fa-refresh mr-1"></i>生成
+                    </button>
+                    <button id="fullscreen-btn" class="flex-1 btn btn-secondary">
+                        <i class="fa fa-expand mr-1"></i>全屏
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 網格容器 -->
+        <div id="grid-container" class="grid-container">
+            <!-- 中央背景圖 -->
+            <div id="center-image" class="center-image" style="background-image: url('https://www.miracletouch.com.tw/www/upload/file/250407155815725bb.jpg'); background-size: 70% auto;"></div>
+            
+            <div id="grid" class="grid w-full h-full gap-0 relative z-10"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const gridContainer = document.getElementById('grid');
+            const rowsInput = document.getElementById('rows');
+            const colsInput = document.getElementById('cols');
+            const generateBtn = document.getElementById('generate-grid');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            const activeCountElement = document.getElementById('active-number');
+            const centerImage = document.getElementById('center-image');
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsPanel = document.getElementById('settings-panel');
+            
+            let activeTouches = new Map();
+            let settingsVisible = false;
+
+            // 初始生成網格
+            generateGrid(parseInt(rowsInput.value), parseInt(colsInput.value));
+
+            // 窗口大小變化時重新調整網格
+            window.addEventListener('resize', function() {
+                generateGrid(parseInt(rowsInput.value), parseInt(colsInput.value));
+            });
+
+            // 設置按鈕點擊事件
+            settingsBtn.addEventListener('click', function() {
+                settingsVisible = !settingsVisible;
+                if (settingsVisible) {
+                    settingsPanel.classList.add('active');
+                    settingsBtn.classList.add('active');
+                } else {
+                    settingsPanel.classList.remove('active');
+                    settingsBtn.classList.remove('active');
+                }
+            });
+
+            // 生成網格事件
+            generateBtn.addEventListener('click', function() {
+                const rows = parseInt(rowsInput.value);
+                const cols = parseInt(colsInput.value);
+                
+                // 檢查輸入範圍
+                if (rows < 1 || rows > 16 || cols < 1 || cols > 22) {
+                    alert('請輸入有效的格子數 (縱向: 1-16, 橫向: 1-22)');
+                    return;
+                }
+                
+                generateGrid(rows, cols);
+                
+                // 生成網格後自動隱藏設置面板
+                settingsVisible = false;
+                settingsPanel.classList.remove('active');
+                settingsBtn.classList.remove('active');
+            });
+
+            // 全屏切換
+            fullscreenBtn.addEventListener('click', function() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        alert(`全屏錯誤: ${err.message}`);
+                    });
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                }
+            });
+
+            // 生成網格函數
+            function generateGrid(rows, cols) {
+                // 清空現有網格
+                gridContainer.innerHTML = '';
+                
+                // 重新添加背景圖和網格容器
+                gridContainer.appendChild(centerImage);
+                const grid = document.createElement('div');
+                grid.id = 'grid';
+                grid.className = 'grid w-full h-full gap-0 relative z-10';
+                gridContainer.appendChild(grid);
+                
+                // 計算網格容器的可用高度
+                const availableHeight = window.innerHeight - 8; // 減去padding
+                
+                // 設置網格列數和行高
+                grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                grid.style.gridTemplateRows = `repeat(${rows}, ${availableHeight / rows}px)`;
+                
+                // 創建新網格
+                for (let i = 0; i < rows; i++) {
+                    for (let j = 0; j < cols; j++) {
+                        const gridItem = document.createElement('div');
+                        gridItem.classList.add('grid-item');
+                        gridItem.dataset.row = i;
+                        gridItem.dataset.col = j;
+                        
+                        // 觸控事件
+                        gridItem.addEventListener('touchstart', handleTouchStart);
+                        gridItem.addEventListener('touchmove', handleTouchMove);
+                        gridItem.addEventListener('touchend', handleTouchEnd);
+                        gridItem.addEventListener('touchcancel', handleTouchEnd);
+                        
+                        // 滑鼠事件 (用於測試)
+                        gridItem.addEventListener('mousedown', function(e) {
+                            e.preventDefault(); // 防止選擇文本
+                            this.classList.toggle('grid-item-active'); // 修改：使用toggle切換類
+                            updateActiveCount();
+                        });
+                        
+                        gridItem.addEventListener('mouseenter', function(e) {
+                            if (e.buttons === 1) { // 只有在按下滑鼠按鈕時才變色
+                                this.classList.add('grid-item-active');
+                                updateActiveCount();
+                            }
+                        });
+                        
+                        // 修改：滑鼠放開時重置所有格子
+                        gridItem.addEventListener('mouseup', function() {
+                            document.removeEventListener('mouseup', resetAllGridItems);
+                            document.addEventListener('mouseup', resetAllGridItems);
+                        });
+                        
+                        grid.appendChild(gridItem);
+                    }
+                }
+                
+                // 重置觸控追蹤
+                activeTouches.clear();
+                updateActiveCount();
+                
+                // 調整背景圖大小和位置
+                adjustCenterImage();
+            }
+
+            // 調整中央背景圖
+            function adjustCenterImage() {
+                // 計算網格容器的位置和大小
+                const gridRect = gridContainer.getBoundingClientRect();
+                
+                // 設置背景圖的位置和大小，使其與網格容器完全重合
+                centerImage.style.top = `${gridRect.top}px`;
+                centerImage.style.left = `${gridRect.left}px`;
+                centerImage.style.width = `${gridRect.width}px`;
+                centerImage.style.height = `${gridRect.height}px`;
+            }
+
+            // 處理觸控開始
+            function handleTouchStart(e) {
+                e.preventDefault(); // 防止頁面滑動
+                const touch = e.touches[0];
+                const target = touch.target;
+                
+                if (target.classList.contains('grid-item')) {
+                    target.classList.add('grid-item-active');
+                    activeTouches.set(touch.identifier, target);
+                    updateActiveCount();
+                }
+            }
+
+            // 處理觸控移動
+            function handleTouchMove(e) {
+                e.preventDefault(); // 防止頁面滑動
+                
+                // 獲取所有格子元素
+                const gridItems = document.querySelectorAll('.grid-item');
+                
+                // 處理當前所有觸控點
+                for (let i = 0; i < e.touches.length; i++) {
+                    const touch = e.touches[i];
+                    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                    
+                    if (target && target.classList.contains('grid-item')) {
+                        // 檢查這個觸控點是否已經有記錄的目標
+                        if (!activeTouches.has(touch.identifier) || activeTouches.get(touch.identifier) !== target) {
+                            // 如果有之前的目標格子，將其重置
+                            if (activeTouches.has(touch.identifier)) {
+                                const previousTarget = activeTouches.get(touch.identifier);
+                                previousTarget.classList.remove('grid-item-active');
+                            }
+                            
+                            // 設置新的目標格子
+                            target.classList.add('grid-item-active');
+                            activeTouches.set(touch.identifier, target);
+                            updateActiveCount();
+                        }
+                    }
+                }
+            }
+
+            // 處理觸控結束
+            function handleTouchEnd(e) {
+                // 移除已經結束的觸控點
+                if (e.changedTouches) {
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (activeTouches.has(touch.identifier)) {
+                            const target = activeTouches.get(touch.identifier);
+                            target.classList.remove('grid-item-active');
+                            activeTouches.delete(touch.identifier);
+                            updateActiveCount();
+                        }
+                    }
+                }
+            }
+
+            // 重置所有格子
+            function resetAllGridItems() {
+                const gridItems = document.querySelectorAll('.grid-item');
+                gridItems.forEach(item => {
+                    item.classList.remove('grid-item-active');
+                });
+                activeTouches.clear();
+                updateActiveCount();
+            }
+
+            // 更新變色格子數量顯示
+            function updateActiveCount() {
+                const activeItems = document.querySelectorAll('.grid-item-active');
+                activeCountElement.textContent = activeItems.length;
+            }
+        });
+    </script>
+</body>
+</html>    
