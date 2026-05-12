@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>奇畿科技Drawing test</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+<style type="text/tailwindcss">
+@layer utilities {
+  .content-auto { content-visibility: auto; }
+  .control-button {
+    @apply fixed top-2 right-2 bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg z-50 flex items-center justify-center w-10 h-10 transition-all duration-300 hover:bg-white focus:outline-none;
+  }
+  .control-button.active {
+    @apply bg-blue-500 text-white;
+  }
+  .settings-panel {
+    @apply fixed top-14 right-2 bg-white/95 backdrop-blur-md p-3 rounded-lg shadow-lg z-40 transform translate-x-full transition-transform duration-300 ease-in-out w-64;
+  }
+  .settings-panel.active {
+    @apply transform translate-x-0;
+  }
+  .active-count {
+    @apply fixed top-2 left-2 bg-blue-500/90 text-white px-2 py-1 rounded-lg shadow-lg text-xs font-medium backdrop-blur-sm z-50;
+  }
+}
+</style>
+<style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;overflow:hidden;background:#fff;}
+    #canvas{display:block;width:100vw;height:100vh;background:#fff;}
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="fingerCount" class="active-count">
+    <span id="active-number">0</span>
+</div>
+
+<button id="settingBtn" class="control-button">
+    <i class="fa fa-cog"></i>
+</button>
+
+<div id="settingPanel" class="settings-panel">
+    <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+            <label class="text-xs font-medium">畫線粗度</label>
+            <input type="range" id="lineWidth" min="1" max="30" value="3" class="w-32">
+            <span id="lwNum" class="text-xs w-6 text-center">3</span>
+        </div>
+        <div class="flex gap-2 pt-1">
+            <button id="fullBtn" class="flex-1 bg-blue-500 text-white px-2 py-1 rounded text-xs">
+                <i class="fa fa-expand mr-1"></i>全螢幕
+            </button>
+            <button id="clearBtn" class="flex-1 bg-red-500 text-white px-2 py-1 rounded text-xs">
+                <i class="fa fa-trash mr-1"></i>清除畫布
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const activeNumber = document.getElementById('active-number');
+const lineWidthEl = document.getElementById('lineWidth');
+const lwNum = document.getElementById('lwNum');
+const clearBtn = document.getElementById('clearBtn');
+const settingBtn = document.getElementById('settingBtn');
+const settingPanel = document.getElementById('settingPanel');
+const fullBtn = document.getElementById('fullBtn');
+
+// 背景圖
+const img = new Image();
+img.src = 'https://www.miracletouch.com.tw/www/upload/file/250407155815725bb.jpg';
+
+// 強制預設粗度 = 3
+const DEFAULT_LINE_WIDTH = 3;
+ctx.lineWidth = DEFAULT_LINE_WIDTH;
+lineWidthEl.value = DEFAULT_LINE_WIDTH;
+lwNum.textContent = DEFAULT_LINE_WIDTH;
+
+// 滑桿調整
+lineWidthEl.addEventListener('input', () => {
+    ctx.lineWidth = parseInt(lineWidthEl.value);
+    lwNum.textContent = lineWidthEl.value;
+});
+
+// 10指固定顏色
+const fingerColors = [
+    '#FF0000','#00FF00','#0000FF','#FFFF00','#FF00FF',
+    '#00FFFF','#FF8800','#8800FF','#0088FF','#FF0088'
+];
+
+// 滑鼠三鍵顏色
+const mouseColor = {
+    0: '#FF0000',
+    1: '#00FF00',
+    2: '#0000FF'
+};
+
+// ======================
+// ✅ 所有按鈕點擊後自動失焦
+// ======================
+function blurAllButtons() {
+    settingBtn.blur();
+    fullBtn.blur();
+    clearBtn.blur();
+}
+
+// 面板開關
+settingBtn.addEventListener('click', () => {
+    settingPanel.classList.toggle('active');
+    settingBtn.classList.toggle('active');
+    blurAllButtons();
+});
+
+// 自動隱藏面板
+function hideSettingsPanel() {
+    settingPanel.classList.remove('active');
+    settingBtn.classList.remove('active');
+    blurAllButtons();
+}
+
+// 清除畫布
+function clearCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawAll();
+    blurAllButtons();
+}
+clearBtn.addEventListener('click', () => {
+    clearCanvas();
+    hideSettingsPanel();
+});
+
+// 快捷鍵清除（安全版）
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'c' || e.key === 'C' || e.key === ' ') {
+        clearCanvas();
+    }
+});
+
+// 全螢幕
+fullBtn.addEventListener('click', async () => {
+    if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen().catch(()=>{});
+    } else {
+        await document.exitFullscreen();
+    }
+    blurAllButtons();
+    hideSettingsPanel();
+    setTimeout(resize, 100);
+});
+
+// 核心變數
+let isDrawing = {};
+let lastX = {};
+let lastY = {};
+let touchIdToIndex = {};
+let nextIndex = 0;
+let mouseDown = false;
+let mouseLastX = 0, mouseLastY = 0;
+let currentMouseColor = '#FF0000';
+
+// 畫布
+function resize() {
+    canvas.width = document.documentElement.clientWidth;
+    canvas.height = document.documentElement.clientHeight;
+    ctx.lineWidth = parseInt(lineWidthEl.value);
+    drawAll();
+}
+
+document.addEventListener('fullscreenchange', () => setTimeout(resize, 100));
+window.addEventListener('resize', resize);
+
+function drawAll() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawBackgroundImage();
+    drawGrid();
+}
+
+function drawBackgroundImage() {
+    if (img.complete) {
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        const x = (canvas.width - img.width)/2;
+        const y = (canvas.height - img.height)/2;
+        ctx.drawImage(img, x, y);
+        ctx.restore();
+    }
+}
+
+function drawGrid() {
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    const gw = canvas.width/6;
+    const gh = canvas.height/6;
+    for (let i=1;i<6;i++) {
+        ctx.beginPath(); ctx.moveTo(i*gw,0); ctx.lineTo(i*gw,canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i*gh); ctx.lineTo(canvas.width,i*gh); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(canvas.width,canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,canvas.height); ctx.lineTo(canvas.width,0); ctx.stroke();
+}
+
+// 觸控數量
+function updateFingerCount(count) {
+    activeNumber.textContent = `${count}`;
+}
+
+// ======================
+// 觸控畫線 → 自動關閉面板
+// ======================
+canvas.addEventListener('touchstart', (e)=>{
+    e.preventDefault();
+    hideSettingsPanel();
+    
+    ctx.lineWidth = parseInt(lineWidthEl.value);
+    const touches = e.changedTouches;
+    for(let t of touches){
+        const id = t.identifier;
+        if(!(id in touchIdToIndex)){
+            touchIdToIndex[id] = nextIndex % 10;
+            nextIndex++;
+        }
+        isDrawing[id] = true;
+        lastX[id] = t.clientX - canvas.getBoundingClientRect().left;
+        lastY[id] = t.clientY - canvas.getBoundingClientRect().top;
+    }
+    updateFingerCount(e.touches.length);
+});
+
+canvas.addEventListener('touchmove', (e)=>{
+    e.preventDefault();
+    ctx.lineWidth = parseInt(lineWidthEl.value);
+    const touches = e.changedTouches;
+    for(let t of touches){
+        const id = t.identifier;
+        if(!isDrawing[id]) continue;
+        const x = t.clientX - canvas.getBoundingClientRect().left;
+        const y = t.clientY - canvas.getBoundingClientRect().top;
+        ctx.strokeStyle = fingerColors[touchIdToIndex[id]];
+        ctx.beginPath();
+        ctx.moveTo(lastX[id], lastY[id]);
+        ctx.lineTo(x,y);
+        ctx.stroke();
+        lastX[id] = x;
+        lastY[id] = y;
+    }
+    updateFingerCount(e.touches.length);
+});
+
+canvas.addEventListener('touchend', (e)=>{
+    for(let t of e.changedTouches) isDrawing[t.identifier] = false;
+    updateFingerCount(e.touches.length);
+});
+
+// ======================
+// 滑鼠畫線 → 自動關閉面板
+// ======================
+canvas.addEventListener('mousedown', (e)=>{
+    e.preventDefault();
+    hideSettingsPanel();
+    
+    ctx.lineWidth = parseInt(lineWidthEl.value);
+    mouseDown = true;
+    currentMouseColor = mouseColor[e.button] || '#FF0000';
+    mouseLastX = e.offsetX;
+    mouseLastY = e.offsetY;
+    updateFingerCount(1);
+});
+
+canvas.addEventListener('mousemove', (e)=>{
+    if(!mouseDown) return;
+    ctx.lineWidth = parseInt(lineWidthEl.value);
+    ctx.strokeStyle = currentMouseColor;
+    ctx.beginPath();
+    ctx.moveTo(mouseLastX, mouseLastY);
+    ctx.lineTo(e.offsetX,e.offsetY);
+    ctx.stroke();
+    mouseLastX = e.offsetX;
+    mouseLastY = e.offsetY;
+});
+
+canvas.addEventListener('mouseup', ()=>{
+    mouseDown = false;
+    updateFingerCount(0);
+});
+
+canvas.addEventListener('mouseleave', ()=>{
+    mouseDown = false;
+    updateFingerCount(0);
+});
+
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
+
+// 初始化
+img.onload = () => { resize(); ctx.lineWidth = DEFAULT_LINE_WIDTH; };
+resize();
+</script>
+</body>
+</html>
